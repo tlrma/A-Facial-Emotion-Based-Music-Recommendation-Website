@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Mood Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        function openSpotifyAndRedirect() {
+            window.open('https://open.spotify.com', '_blank');
+            window.location.href = "{{ url_for('play') }}";
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Personal Mood Player</h1>
+        <a href="javascript:void(0);" class="login-button" onclick="openSpotifyAndRedirect()">스포티파이에 로그인하기</a>
+    </div>
+</body>
+</html>

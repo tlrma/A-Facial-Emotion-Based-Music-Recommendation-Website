@@ -1,0 +1,197 @@
+import os
+import math
+import pickle
+import cv2
+import numpy as np
+import torch
+import torchvision.transforms as transforms
+from torchvision import models
+from PIL import Image
+import face_recognition
+from sklearn import neighbors
+from face_recognition.face_recognition_cli import image_files_in_folder
+
+# 라벨을 정수형으로 변환하는 딕셔너리 생성
+label_map = {0: 'angry', 1: 'happy', 2: 'surprise', 3: 'sad', 4: 'neutral'}
+
+# 감정 인식 모델 정의 및 로드
+model = models.resnet18(weights=None)
+num_ftrs = model.fc.in_features
+model.fc = torch.nn.Linear(num_ftrs, 5)
+model.load_state_dict(torch.load('emotion_recognition_model.pth', map_location=torch.device('cpu')))
+model.eval()
+
+# 데이터 변환
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree', verbose=False):
+    X = []
+    y = []
+
+    # Loop through each person in the training set
+    for class_dir in os.listdir(train_dir):
+        if not os.path.isdir(os.path.join(train_dir, class_dir)):
+            continue
+
+        # Loop through each training image for the current person
+        for img_path in image_files_in_folder(os.path.join(train_dir, class_dir)):
+            image = face_recognition.load_image_file(img_path)
+            face_bounding_boxes = face_recognition.face_locations(image)
+
+            if len(face_bounding_boxes) != 1:
+                if verbose:
+                    print("Image {} not suitable for training: {}".format(img_path, "Didn't find a face" if len(face_bounding_boxes) < 1 else "Found more than one face"))
+            else:
+                X.append(face_recognition.face_encodings(image, known_face_locations=face_bounding_boxes)[0])
+                y.append(class_dir)
+
+    if len(X) == 0 or len(y) == 0:
+        return None
+
+    if n_neighbors is None:
+        n_neighbors = int(round(math.sqrt(len(X))))
+        if verbose:
+            print("Chose n_neighbors automatically:", n_neighbors)
+
+    knn_clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors, algorithm=knn_algo, weights='distance')
+    knn_clf.fit(X, y)
+    
+    if model_save_path is not None:
+        with open(model_save_path, 'wb') as f:
+            pickle.dump(knn_clf, f)
+
+    return knn_clf
+
+def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.6):
+    if not os.path.isfile(X_img_path) or os.path.splitext(X_img_path)[1][1:] not in ALLOWED_EXTENSIONS:
+        raise Exception("Invalid image path: {}".format(X_img_path))
+
+    if knn_clf is None and model_path is None:
+        raise Exception("Must supply knn classifier either through knn_clf or model_path")
+
+    if knn_clf is None:
+        with open(model_path, 'rb') as f:
+            knn_clf = pickle.load(f)
+
+    X_img = face_recognition.load_image_file(X_img_path)
+    X_face_locations = face_recognition.face_locations(X_img)
+
+    if len(X_face_locations) == 0:
+        return []
+
+    faces_encodings = face_recognition.face_encodings(X_img, known_face_locations=X_face_locations)
+    closest_distances = knn_clf.kneighbors(faces_encodings, n_neighbors=1)
+    are_matches = [closest_distances[0][i][0] <= distance_threshold for i in range(len(X_face_locations))]
+
+    return [(pred, loc) if rec else ("unknown", loc) for pred, loc, rec in zip(knn_clf.predict(faces_encodings), X_face_locations, are_matches)]
+
+def detect_and_recognize(frame, knn_clf, model_path=None):
+    X_face_locations = face_recognition.face_locations(frame)
+    faces_encodings = face_recognition.face_encodings(frame, known_face_locations=X_face_locations)
+    
+    if len(X_face_locations) == 0:
+        return []
+
+    if knn_clf is None and model_path is not None:
+        with open(model_path, 'rb') as f:
+            knn_clf = pickle.load(f)
+
+    if knn_clf is None:
+        return [("unknown", loc) for loc in X_face_locations]
+
+    closest_distances = knn_clf.kneighbors(faces_encodings, n_neighbors=1)
+    are_matches = [closest_distances[0][i][0] <= 0.6 for i in range(len(X_face_locations))]
+
+    return [(pred, loc) if rec else ("unknown", loc) for pred, loc, rec in zip(knn_clf.predict(faces_encodings), X_face_locations, are_matches)]
+
+def recognize_emotion(frame, face_location):
+    top, right, bottom, left = face_location
+    face = frame[top:bottom, left:right]
+    face_pil = Image.fromarray(cv2.cvtColor(face, cv2.COLOR_BGR2RGB))
+    face_tensor = transform(face_pil)
+    face_tensor = face_tensor.unsqueeze(0)
+
+    with torch.no_grad():
+        outputs = model(face_tensor)
+        _, predicted = torch.max(outputs, 1)
+        emotion = label_map[predicted.item()]
+
+    return emotion
+
+import datetime
+
+def save_existing_user_image(frame, face_location, user_name, base_dir='user'):
+    top, right, bottom, left = face_location
+    face = frame[top:bottom, left:right]
+    
+    user_dir = os.path.join(base_dir, user_name)
+    if not os.path.exists(user_dir):
+        os.makedirs(user_dir)
+
+    current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    img_path = os.path.join(user_dir, f"{user_name}_{current_time}.jpg")
+    cv2.imwrite(img_path, face)
+    print(f"Saved image for existing user {user_name} at {img_path}")
+
+def save_new_user(frame, face_location, base_dir='user'):
+    top, right, bottom, left = face_location
+    face = frame[top:bottom, left:right]
+    
+    cv2.waitKey(1)
+    name = input("새로운 사용자입니다. 사용자의 이름을 입력하세요.")
+    user_dir = os.path.join(base_dir, name)
+
+    if not os.path.exists(user_dir):
+        os.makedirs(user_dir)
+
+    current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    img_path = os.path.join(user_dir, f"{name}_{current_time}.jpg")
+    cv2.imwrite(img_path, face)
+    print(f"Saved new user {name} at {img_path}")
+
+# 이미지 파일을 사용하여 얼굴 인식 및 감정 예측
+def process_image(image_path):
+    frame = cv2.imread(image_path)
+    if frame is None:
+        print("Invalid image path or the image could not be loaded.")
+        return
+
+    # KNN 모델 로드
+    knn_clf = None
+    if os.path.exists('knn_model.clf'):
+        with open('knn_model.clf', 'rb') as f:
+            knn_clf = pickle.load(f)
+    
+    try:
+        knn_clf = train(train_dir='user', model_save_path='knn_model.clf')
+    except:
+        knn_clf = None
+
+    # 얼굴 인식 및 사용자 이름 찾기
+    face_recognition_results = detect_and_recognize(frame, knn_clf)
+
+    for name, (top, right, bottom, left) in face_recognition_results:
+        if name == "unknown":
+            save_new_user(frame, (top, right, bottom, left))
+            knn_clf = train(train_dir='user', model_save_path='knn_model.clf')
+        else:
+            save_existing_user_image(frame, (top, right, bottom, left), name)
+            emotion = recognize_emotion(frame, (top, right, bottom, left))
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+            cv2.putText(frame, f'{name}', (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+
+    # 결과 이미지 저장
+    result_path = "result.jpg"
+    cv2.imwrite(result_path, frame)
+    print(f"Processed image saved at {result_path}")
+
+# 예제 이미지 경로
+image_path = "ex.jpg"  # 여기에 이미지 경로를 입력하세요
+
+process_image(image_path)

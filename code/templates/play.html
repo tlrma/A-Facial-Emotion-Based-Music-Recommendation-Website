@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Mood Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        function showPopup(emotion) {
+            var popup = document.getElementById("popup");
+            popup.style.display = "block";
+            document.getElementById("popup-emotion").textContent = emotion;
+        }
+
+        function closePopup(action) {
+            var form = document.getElementById("popup-form");
+            form.elements['action'].value = action;
+            form.submit();
+        }
+
+        // 새로운 사용자가 감지되었을 때 팝업을 자동으로 표시
+        document.addEventListener("DOMContentLoaded", function() {
+            var name = "{{ name }}";
+            var emotion = "{{ emotion }}";
+            if (name === "unknown" && emotion) {
+                showPopup(emotion);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Personal Mood Player</h1>
+        <form action="{{ url_for('play') }}" method="post">
+            <button type="submit" class="play-button">오늘 나의 감정에 맞는 노래 듣기</button>
+        </form>
+    </div>
+
+    <div id="popup" class="popup" style="display: none;">
+        <div class="popup-content">
+            <h2>새로운 사용자 발견</h2>
+            <p>감정은 <strong id="popup-emotion"></strong>로 분석되었습니다.</p>
+            <p>사용자 등록을 하시겠습니까?</p>
+            <form id="popup-form" action="{{ url_for('register_popup') }}" method="post">
+                <input type="hidden" name="emotion" value="{{ emotion }}">
+                <input type="hidden" name="action" value="">
+                <div>
+                    <label for="username">이름:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <button type="button" onclick="closePopup('yes')">예</button>
+                <button type="button" onclick="closePopup('no')">아니오</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

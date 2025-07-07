@@ -1,0 +1,111 @@
+/* 기존 스타일 */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #4682B4; /* 분홍색 배경 */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.container {
+    width: 90%;
+    max-width: 1200px;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+h1 {
+    color: #4682B4; /* 분홍색 제목 */
+    margin-bottom: 20px;
+}
+
+.login-button {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4682B4; /* 분홍색 버튼 */
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.login-button:hover {
+    background-color: #4682B4; /* 버튼 호버 시 진한 분홍색 */
+}
+
+.content {
+    display: flex;
+    justify-content: space-between;
+}
+
+.current-info, .webcam, .past-emotions {
+    flex: 1;
+    margin: 0 10px;
+}
+
+.current-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4682B4; /* 분홍색 버튼 */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #4682B4; /* 버튼 호버 시 진한 분홍색 */
+}
+
+.webcam img {
+    width: 100%;
+    height: auto;
+    border: 2px solid #4682B4; /* 분홍색 테두리 */
+    border-radius: 10px;
+}
+
+.past-emotions ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.past-emotions li {
+    margin-bottom: 10px;
+    color: #4682B4; /* 분홍색 텍스트 */
+}
+
+/* 팝업 스타일 */
+.popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.popup-content {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
